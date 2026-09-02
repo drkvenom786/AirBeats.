@@ -291,6 +291,19 @@ class VoiceAssistantOverlayManager(private val context: Context) {
         }
     }
 
+    fun hideOverlay() {
+        hide()
+    }
+
+    fun updateAudioRms(rmsDb: Float) {
+        mainHandler.post {
+            try {
+                val alpha = (rmsDb / 80f).coerceIn(0.35f, 1.0f)
+                glowBar?.alpha = alpha
+            } catch (_: Exception) {}
+        }
+    }
+
     /**
      * Hides the floating bottom overlay.
      */

@@ -458,6 +458,7 @@ class VoiceAssistantManager(
 
                             val margin = if (isMusicPlaying) 8.0 else 3.5
                             val minDb = if (isMusicPlaying) 42.0 else 18.0
+                            val speechThreshold = (ambientNoiseFloor + margin).coerceIn(minDb, 68.0)
                             val triggerNow = System.currentTimeMillis()
                             val onnxMatch = onnxWakeWordEngine?.process(buffer, read) == true
 
