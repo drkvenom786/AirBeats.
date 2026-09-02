@@ -9,9 +9,6 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
-import com.darkxvenom.airbeats.voice.VoiceAssistantActionExecutor
-import com.darkxvenom.airbeats.voice.VoiceAssistantManager
-import com.darkxvenom.airbeats.voice.VoiceCommand
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -410,96 +407,7 @@ private fun VoiceTestCard() {
     var isTesting by remember { mutableStateOf(false) }
     var actionStatus by remember { mutableStateOf("") }
 
-    val actionExecutor = remember {
-        VoiceAssistantActionExecutor(
-            context = context,
-            scope = coroutineScope,
-            getMusicService = { playerConnection?.service }
-        )
-    }
-
-    val testManager = remember {
-        VoiceAssistantManager(
-            context = context,
-            onWakeWordHeard = { /* live text automatically streamed */ },
-            onCommandRecognized = { command, text ->
-                when (command) {
-                    is VoiceCommand.PlayGenericMusic -> {
-                        actionStatus = "Loading recommended music..."
-                    }
-                    is VoiceCommand.PlayCachedSongs -> {
-                        actionStatus = "Loading and playing cached library songs..."
-                    }
-                    is VoiceCommand.PlayLikedSongs -> {
-                        actionStatus = "Loading and playing liked songs..."
-                    }
-                    is VoiceCommand.PlaySong -> {
-                        actionStatus = "Searching and playing: \"${command.query}\"..."
-                    }
-                    is VoiceCommand.Pause -> {
-                        actionStatus = "Music paused"
-                    }
-                    is VoiceCommand.Resume -> {
-                        actionStatus = "Music resumed"
-                    }
-                    is VoiceCommand.NextTrack -> {
-                        actionStatus = "Skipping to next song"
-                    }
-                    is VoiceCommand.PreviousTrack -> {
-                        actionStatus = "Playing previous song"
-                    }
-                    is VoiceCommand.ToggleLike -> {
-                        actionStatus = "Toggled favorite"
-                    }
-                    is VoiceCommand.StartRadio -> {
-                        actionStatus = "Starting radio station"
-                    }
-                    is VoiceCommand.VolumeUp -> {
-                        actionStatus = "Volume increased"
-                    }
-                    is VoiceCommand.VolumeDown -> {
-                        actionStatus = "Volume decreased"
-                    }
-                    is VoiceCommand.SetVolume -> {
-                        actionStatus = "Volume set to ${command.levelPercent}%"
-                    }
-                    is VoiceCommand.Mute -> {
-                        actionStatus = "Muted"
-                    }
-                    is VoiceCommand.Unmute -> {
-                        actionStatus = "Unmuted"
-                    }
-                    is VoiceCommand.Unknown -> {
-                        actionStatus = "Heard: \"$text\""
-                    }
-                }
-                actionExecutor.execute(command)
-                isTesting = false
-            }
-        )
-    }
-
-    val liveSpokenText by testManager.lastRecognizedText.collectAsState()
-    val isMicListening by testManager.isListening.collectAsState()
-    val audioRms by testManager.audioRms.collectAsState()
-
-    DisposableEffect(Unit) {
-        onDispose {
-            testManager.destroy()
-            actionExecutor.release()
-        }
-    }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = if (isTesting && isMicListening) 1.25f else 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
+    val isServiceRunning by VoiceAssistantService.isServiceRunning.collectAsState()
 
     Surface(
         modifier = Modifier
@@ -516,22 +424,18 @@ private fun VoiceTestCard() {
             Box(
                 modifier = Modifier
                     .size(68.dp)
-                    .scale(pulseScale)
                     .clip(CircleShape)
                     .background(
                         if (isTesting) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.primaryContainer
                     )
                     .clickable {
-                        if (!isTesting) {
-                            isTesting = true
-                            actionStatus = "Listening... say \"Play Starboy\" or any command"
-                            testManager.triggerListeningSession()
-                        } else {
-                            isTesting = false
-                            testManager.stop()
-                            actionStatus = ""
+                        if (!isServiceRunning) {
+                            VoiceAssistantService.start(context)
                         }
+                        isTesting = true
+                        actionStatus = "Listening for \"Hey AirBeats\" or command..."
+                        VoiceAssistantService.instance?.triggerListening()
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -544,37 +448,11 @@ private fun VoiceTestCard() {
             }
 
             Text(
-                text = if (isTesting) "Tap mic to stop test" else "Tap mic to test live voice & playback",
+                text = "Tap mic to test live voice assistant & overlay HUD",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )
 
-            // Live speech display (shows words live as you speak)
-            if (isTesting && !liveSpokenText.isNullOrBlank()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
-                        .padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "🗣️ Spoken words:",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "\"$liveSpokenText\"",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            // Action status & feedback
             if (actionStatus.isNotBlank()) {
                 Text(
                     text = actionStatus,

@@ -40,8 +40,11 @@ class VoiceAssistantService : Service() {
     private var musicService: MusicService? = null
     private var isMusicServiceBound = false
 
-    private lateinit var voiceAssistantManager: VoiceAssistantManager
+    private var audioCapture: VoiceAudioCapture? = null
+    private var inferenceManager: VoiceInferenceManager? = null
+    private var stateMachine: VoiceStateMachine? = null
     private lateinit var actionExecutor: VoiceAssistantActionExecutor
+    private var overlayManager: VoiceAssistantOverlayManager? = null
 
     companion object {
         const val NOTIFICATION_ID = 2001
@@ -85,8 +88,6 @@ class VoiceAssistantService : Service() {
         }
     }
 
-    private var overlayManager: VoiceAssistantOverlayManager? = null
-
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -106,30 +107,93 @@ class VoiceAssistantService : Service() {
             overlayManager = overlayManager
         )
 
-        voiceAssistantManager = VoiceAssistantManager(
-            context = this,
-            onWakeWordHeard = { text ->
-                overlayManager?.showListening()
-                overlayManager?.updateSpokenText(text)
+        val infManager = VoiceInferenceManager(this, serviceScope)
+        inferenceManager = infManager
+
+        val stateMach = VoiceStateMachine(serviceScope) { newState ->
+            when (newState) {
+                VoiceState.COMMAND_LISTEN -> {
+                    infManager.startCommandListening()
+                    overlayManager?.showListening()
+                    overlayManager?.updateSpokenText("Listening...")
+                }
+                VoiceState.EXECUTING -> {
+                    // Kept visible for confirmation toast/label
+                }
+                VoiceState.WAKE_WORD, VoiceState.DISABLED, VoiceState.INITIALIZING -> {
+                    overlayManager?.hideOverlay()
+                }
+            }
+        }
+        stateMachine = stateMach
+
+        // Single AudioRecord Owner
+        audioCapture = VoiceAudioCapture(
+            onAudioFrame = { buffer, count ->
+                infManager.onAudioFrame(buffer, count, stateMach.state.value)
             },
-            onCommandRecognized = { command, text ->
-                Timber.i("VoiceAssistantService received command: %s (from text: '%s')", command, text)
-                overlayManager?.updateSpokenText(text)
-                updateNotificationText("Executing: \"$text\"")
-                actionExecutor.execute(command)
+            onRmsCalculated = { db ->
+                overlayManager?.updateAudioRms(db)
             }
         )
 
-        actionExecutor.onTtsSpeakingChanged = { isSpeaking ->
-            voiceAssistantManager.setTtsSpeaking(isSpeaking)
+        // Observe Decoupled Voice Events
+        serviceScope.launch {
+            infManager.events.collectLatest { event ->
+                when (event) {
+                    is VoiceEvent.WakeWordDetected -> {
+                        Timber.i("VoiceAssistantService: Wake Word event received")
+                        stateMach.onWakeWordDetected()
+                    }
+                    is VoiceEvent.CommandDetected -> {
+                        stateMach.onCommandDetected(event.command)
+                        executeAirBeatsCommand(event.command, event.query, event.rawText)
+                    }
+                    is VoiceEvent.RmsChanged -> {
+                        overlayManager?.updateAudioRms(event.rmsDb)
+                    }
+                    is VoiceEvent.StateChanged -> {}
+                    is VoiceEvent.Error -> {
+                        Timber.e("VoiceAssistantService Error: %s", event.message)
+                    }
+                }
+            }
         }
 
-        voiceAssistantManager.start()
+        // Transition to active wake word listening
+        stateMach.transitionTo(VoiceState.WAKE_WORD)
+        audioCapture?.start()
+        Timber.i("VoiceAssistantService initialized and listening with single AudioRecord capture loop")
+    }
+
+    private fun executeAirBeatsCommand(command: AirBeatsCommand, query: String?, rawText: String?) {
+        val label = rawText ?: command.name
+        overlayManager?.updateSpokenText(label)
+        updateNotificationText("Executing: \"$label\"")
+
+        val voiceCommand: VoiceCommand = when (command) {
+            AirBeatsCommand.NEXT -> VoiceCommand.NextTrack
+            AirBeatsCommand.PREVIOUS -> VoiceCommand.PreviousTrack
+            AirBeatsCommand.PAUSE -> VoiceCommand.Pause
+            AirBeatsCommand.RESUME, AirBeatsCommand.PLAY -> VoiceCommand.Resume
+            AirBeatsCommand.VOLUME_UP -> VoiceCommand.VolumeUp
+            AirBeatsCommand.VOLUME_DOWN -> VoiceCommand.VolumeDown
+            AirBeatsCommand.MUTE -> VoiceCommand.Mute
+            AirBeatsCommand.UNMUTE -> VoiceCommand.Unmute
+            AirBeatsCommand.TOGGLE_LIKE -> VoiceCommand.ToggleLike
+            AirBeatsCommand.START_RADIO -> VoiceCommand.StartRadio
+            AirBeatsCommand.PLAY_GENERIC -> VoiceCommand.PlayGenericMusic
+            AirBeatsCommand.PLAY_CACHED -> VoiceCommand.PlayCachedSongs
+            AirBeatsCommand.PLAY_LIKED -> VoiceCommand.PlayLikedSongs
+            AirBeatsCommand.PLAY_SONG -> VoiceCommand.PlaySong(query ?: "Music")
+            AirBeatsCommand.NONE -> return
+        }
+
+        actionExecutor.execute(voiceCommand)
     }
 
     fun triggerListening() {
-        overlayManager?.showListening()
-        voiceAssistantManager.triggerListeningSession()
+        stateMachine?.transitionTo(VoiceState.COMMAND_LISTEN)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -305,13 +369,21 @@ class VoiceAssistantService : Service() {
         overlayManager?.hide()
         overlayManager = null
 
-        voiceAssistantManager.destroy()
+        audioCapture?.stop()
+        audioCapture = null
+
+        inferenceManager?.release()
+        inferenceManager = null
+
+        stateMachine?.reset()
+        stateMachine = null
+
         actionExecutor.release()
         releaseWakeLock()
         unbindMusicService()
         serviceScope.cancel()
 
         super.onDestroy()
-        Timber.d("VoiceAssistantService destroyed")
+        Timber.d("VoiceAssistantService destroyed cleanly")
     }
 }
