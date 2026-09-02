@@ -86,9 +86,9 @@ object OfflineCommandClassifier {
             syllables, avgEnergy, maxEnergy, zcr)
 
         return when {
-            syllables == 1 && zcr > 0.13f -> Pair(VoiceCommand.Next, "Next")
+            syllables == 1 && zcr > 0.13f -> Pair(VoiceCommand.NextTrack, "Next")
             syllables == 1 && zcr <= 0.13f -> Pair(VoiceCommand.Pause, "Pause")
-            syllables in 2..3 && zcr > 0.12f -> Pair(VoiceCommand.Previous, "Previous")
+            syllables in 2..3 && zcr > 0.12f -> Pair(VoiceCommand.PreviousTrack, "Previous")
             syllables == 2 && zcr <= 0.12f -> Pair(VoiceCommand.Resume, "Play")
             syllables >= 3 -> Pair(VoiceCommand.VolumeUp, "Volume Up")
             else -> Pair(VoiceCommand.Resume, "Play")
