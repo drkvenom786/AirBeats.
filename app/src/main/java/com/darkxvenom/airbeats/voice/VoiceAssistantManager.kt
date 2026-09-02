@@ -43,13 +43,16 @@ class VoiceAssistantManager(
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
 
     private var isRunning = false
-    private var requireWakeWord = false
     private var isRecognizing = false
+    private var isManualTrigger = false
     private var lastTriggerTimestamp = 0L
 
     @Volatile
     private var isTtsSpeaking = false
     private var ttsFinishedTimestamp = 0L
+
+    // ONNX Wake Word Engine
+    private var onnxWakeWordEngine: OnnxWakeWordEngine? = null
 
     // Background Silent AudioRecord Monitor
     private var audioRecord: AudioRecord? = null
@@ -78,7 +81,7 @@ class VoiceAssistantManager(
         private const val SAMPLE_RATE = 16000
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
-        private const val DEBOUNCE_COOLDOWN_MS = 600L
+        private const val DEBOUNCE_COOLDOWN_MS = 800L
         private const val TTS_SILENCE_GRACE_MS = 600L
     }
 
@@ -91,14 +94,17 @@ class VoiceAssistantManager(
         }
     }
 
-    fun start(requireWakeWord: Boolean = false) {
-        this.requireWakeWord = requireWakeWord
+    fun start() {
         if (isRunning) return
         isRunning = true
         _isListening.value = false
 
+        if (onnxWakeWordEngine == null) {
+            onnxWakeWordEngine = OnnxWakeWordEngine(context)
+        }
+
         startBackgroundAudioMonitor()
-        Timber.i("VoiceAssistantManager started 24/7 background listener (requireWakeWord=%b)", requireWakeWord)
+        Timber.i("VoiceAssistantManager started hands-free listener with ONNX wake word ('Hey AirBeats')")
     }
 
     fun stop() {
@@ -106,10 +112,8 @@ class VoiceAssistantManager(
         _isListening.value = false
         cancelRecognition()
         stopBackgroundAudioMonitor()
-    }
-
-    fun updateSettings(requireWakeWord: Boolean) {
-        this.requireWakeWord = requireWakeWord
+        onnxWakeWordEngine?.release()
+        onnxWakeWordEngine = null
     }
 
     /**
@@ -121,6 +125,7 @@ class VoiceAssistantManager(
             if (isTtsSpeaking || (now - ttsFinishedTimestamp < TTS_SILENCE_GRACE_MS)) {
                 return@post
             }
+            isManualTrigger = true
             startSpeechRecognition()
         }
     }
@@ -232,6 +237,7 @@ class VoiceAssistantManager(
     private fun finishRecognition() {
         isRecognizing = false
         _isListening.value = false
+        isManualTrigger = false
         restoreSystemSound()
 
         try {
@@ -252,6 +258,7 @@ class VoiceAssistantManager(
     private fun cancelRecognition() {
         isRecognizing = false
         _isListening.value = false
+        isManualTrigger = false
         mainHandler.post {
             restoreSystemSound()
             try {
@@ -316,24 +323,33 @@ class VoiceAssistantManager(
             _lastRecognizedText.value = topText
             Timber.i("Voice Assistant recognized: %s", matches.joinToString(" | "))
 
-            var commandExecuted = false
-            for (candidate in matches) {
-                val command = VoiceCommandParser.parse(candidate.trim(), requireWakeWord = false)
-                if (command !is VoiceCommand.Unknown) {
-                    onCommandRecognized(command, candidate.trim())
-                    commandExecuted = true
-                    break
-                }
-            }
+            val hasWakeWordInMatches = matches.any { VoiceCommandParser.containsWakeWord(it) }
 
-            // Fallback: If no control command matched, treat spoken text as song search
-            if (!commandExecuted && topText.isNotBlank()) {
-                val directCommand = VoiceCommandParser.parse(topText, requireWakeWord = false)
-                if (directCommand !is VoiceCommand.Unknown) {
-                    onCommandRecognized(directCommand, topText)
-                } else if (topText.length >= 2) {
-                    onCommandRecognized(VoiceCommand.PlaySong(topText), topText)
+            if (isManualTrigger || hasWakeWordInMatches) {
+                var commandExecuted = false
+                for (candidate in matches) {
+                    val command = VoiceCommandParser.parse(candidate.trim(), requireWakeWord = !isManualTrigger)
+                    if (command !is VoiceCommand.Unknown) {
+                        onCommandRecognized(command, candidate.trim())
+                        commandExecuted = true
+                        break
+                    }
                 }
+
+                if (!commandExecuted && hasWakeWordInMatches) {
+                    val command = matches.map { VoiceCommandParser.parse(it, requireWakeWord = false) }
+                        .firstOrNull { it !is VoiceCommand.Unknown }
+                    if (command != null) {
+                        onCommandRecognized(command, topText)
+                    } else if (topText.length >= 4) {
+                        val query = topText.replace(Regex("(?i)^(hey\\s+airbeats|airbeats|hey\\s+aerobeats|aerobeats|play)\\s*"), "").trim()
+                        if (query.isNotBlank()) {
+                            onCommandRecognized(VoiceCommand.PlaySong(query), topText)
+                        }
+                    }
+                }
+            } else {
+                Timber.d("Strict Wake Word Filter: Ignored speech without 'Hey AirBeats': %s", topText)
             }
         }
 
@@ -441,15 +457,25 @@ class VoiceAssistantManager(
 
                             val margin = if (isMusicPlaying) 8.0 else 3.5
                             val minDb = if (isMusicPlaying) 42.0 else 18.0
-                            val speechThreshold = (ambientNoiseFloor + margin).coerceIn(minDb, 68.0)
+                            val triggerNow = System.currentTimeMillis()
+                            val onnxMatch = onnxWakeWordEngine?.process(buffer, read) == true
+
+                            if (onnxMatch && (triggerNow - lastTriggerTimestamp > DEBOUNCE_COOLDOWN_MS) && !isSelfSpeaking) {
+                                lastTriggerTimestamp = triggerNow
+                                Timber.i("ONNX Wake Word Engine spotted 'Hey AirBeats'!")
+                                mainHandler.post {
+                                    onWakeWordHeard?.invoke("AirBeats is listening...")
+                                    startSpeechRecognition()
+                                }
+                                break
+                            }
 
                             if (db >= speechThreshold) {
                                 voiceOnsetFrames++
-                                val triggerNow = System.currentTimeMillis()
 
-                                if (voiceOnsetFrames >= 1 && (triggerNow - lastTriggerTimestamp > DEBOUNCE_COOLDOWN_MS) && !isSelfSpeaking) {
+                                if (voiceOnsetFrames >= 2 && (triggerNow - lastTriggerTimestamp > DEBOUNCE_COOLDOWN_MS) && !isSelfSpeaking) {
                                     lastTriggerTimestamp = triggerNow
-                                    Timber.i("Background voice onset detected (db=%.1f) -> Starting speech recognition...", db)
+                                    Timber.i("Voice onset detected (db=%.1f) -> Starting speech recognition for wake word verification...", db)
 
                                     mainHandler.post {
                                         startSpeechRecognition()

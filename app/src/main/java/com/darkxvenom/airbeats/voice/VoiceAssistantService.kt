@@ -18,7 +18,6 @@ import androidx.datastore.preferences.core.edit
 import com.darkxvenom.airbeats.MainActivity
 import com.darkxvenom.airbeats.R
 import com.darkxvenom.airbeats.constants.EnableVoiceAssistantKey
-import com.darkxvenom.airbeats.constants.VoiceAssistantDirectCommandsKey
 import com.darkxvenom.airbeats.playback.MusicService
 import com.darkxvenom.airbeats.utils.dataStore
 import com.darkxvenom.airbeats.utils.get
@@ -125,17 +124,7 @@ class VoiceAssistantService : Service() {
             voiceAssistantManager.setTtsSpeaking(isSpeaking)
         }
 
-        serviceScope.launch {
-            val directCommands = dataStore.get(VoiceAssistantDirectCommandsKey, true)
-            val requireWakeWord = !directCommands
-            voiceAssistantManager.start(requireWakeWord = requireWakeWord)
-
-            // Observe direct command setting changes
-            dataStore.data.collectLatest {
-                val direct = it[VoiceAssistantDirectCommandsKey] ?: true
-                voiceAssistantManager.updateSettings(requireWakeWord = !direct)
-            }
-        }
+        voiceAssistantManager.start()
     }
 
     fun triggerListening() {

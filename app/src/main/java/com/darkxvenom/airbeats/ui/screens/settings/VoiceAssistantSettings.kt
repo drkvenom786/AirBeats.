@@ -69,7 +69,6 @@ import androidx.navigation.NavController
 import com.darkxvenom.airbeats.R
 import com.darkxvenom.airbeats.constants.EnableVoiceAssistantKey
 import com.darkxvenom.airbeats.constants.VoiceAssistantAutoStartOnBootKey
-import com.darkxvenom.airbeats.constants.VoiceAssistantDirectCommandsKey
 import com.darkxvenom.airbeats.constants.VoiceAssistantTtsFeedbackKey
 import com.darkxvenom.airbeats.ui.component.PreferenceGroupTitle
 import com.darkxvenom.airbeats.ui.component.SettingsGeneralCategory
@@ -88,10 +87,6 @@ fun VoiceAssistantSettings(
 
     val (enableVoiceAssistant, onEnableVoiceAssistantChange) = rememberPreference(
         EnableVoiceAssistantKey,
-        defaultValue = false
-    )
-    val (directCommands, onDirectCommandsChange) = rememberPreference(
-        VoiceAssistantDirectCommandsKey,
         defaultValue = false
     )
     val (ttsFeedback, onTtsFeedbackChange) = rememberPreference(
@@ -308,20 +303,6 @@ fun VoiceAssistantSettings(
                 SettingsGeneralCategory(
                     title = "Configuration",
                     items = listOf(
-                        {
-                            SwitchPreference(
-                                title = { Text(stringResource(R.string.voice_direct_commands)) },
-                                description = stringResource(R.string.voice_direct_commands_desc),
-                                icon = {
-                                    Icon(
-                                        painter = painterResource(R.drawable.mic),
-                                        contentDescription = null
-                                    )
-                                },
-                                checked = directCommands,
-                                onCheckedChange = onDirectCommandsChange
-                            )
-                        },
                         {
                             SwitchPreference(
                                 title = { Text(stringResource(R.string.voice_tts_feedback)) },

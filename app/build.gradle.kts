@@ -230,6 +230,8 @@ dependencies {
     implementation(libs.liquid.glass)
     implementation(libs.liquid.glass.shape)
 
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
+
     implementation(libs.timber)
     testImplementation(libs.junit)
 }
