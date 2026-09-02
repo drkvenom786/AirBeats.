@@ -1031,6 +1031,16 @@ fun SettingsScreen(
                                 onClick = { navController.navigate("settings/android_auto") }
                             ),
                             SettingsCategoryItem(
+                                icon = painterResource(R.drawable.mic),
+                                title = {
+                                    Text(
+                                        stringResource(R.string.voice_assistant),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
+                                onClick = { navController.navigate("settings/voice_assistant") }
+                            ),
+                            SettingsCategoryItem(
                                 icon = painterResource(R.drawable.group),
                                 title = {
                                     Text(
