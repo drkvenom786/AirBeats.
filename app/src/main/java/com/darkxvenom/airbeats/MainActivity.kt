@@ -1044,6 +1044,43 @@ class MainActivity : FragmentActivity() {
 
                                         val uri = intent.data ?: intent.extras?.getString(Intent.EXTRA_TEXT)
                                             ?.toUri() ?: return@Consumer
+
+                                        if (uri.scheme == "airbeats") {
+                                            when (uri.host) {
+                                                "play" -> {
+                                                    val query = uri.getQueryParameter("q")
+                                                        ?: uri.getQueryParameter("query")
+                                                        ?: uri.getQueryParameter("title")
+                                                        ?: uri.getQueryParameter("search")
+                                                    if (!query.isNullOrBlank()) {
+                                                        val serviceIntent = Intent(this@MainActivity, com.darkxvenom.airbeats.playback.MusicService::class.java).apply {
+                                                            action = android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH
+                                                            putExtra(android.app.SearchManager.QUERY, query)
+                                                            uri.getQueryParameter("artist")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ARTIST, it) }
+                                                            uri.getQueryParameter("album")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ALBUM, it) }
+                                                        }
+                                                        try {
+                                                            startService(serviceIntent)
+                                                        } catch (e: Exception) {
+                                                            Timber.e(e, "Failed to start MusicService for airbeats://play deep link")
+                                                        }
+                                                    }
+                                                    return@Consumer
+                                                }
+                                                "search" -> {
+                                                    val query = uri.getQueryParameter("q") ?: uri.getQueryParameter("query")
+                                                    if (!query.isNullOrBlank()) {
+                                                        navController.navigate("search/${java.net.URLEncoder.encode(query, "UTF-8")}")
+                                                    } else {
+                                                        openSearchImmediately = true
+                                                    }
+                                                    return@Consumer
+                                                }
+                                                "auth-callback" -> {
+                                                    return@Consumer
+                                                }
+                                            }
+                                        }
                                         
                                         if (com.darkxvenom.airbeats.utils.RemoteConfigManager.isMatchingListenTogetherDomain(uri.host)) {
                                             val code = uri.getQueryParameter("code")
@@ -2023,6 +2060,52 @@ class MainActivity : FragmentActivity() {
                                                 startService(serviceIntent)
                                             } catch (e: Exception) {
                                                 Timber.e(e, "Failed to start MusicService for voice play intent")
+                                            }
+                                            pendingIntentFlow.value = null
+                                        }
+                                        Intent.ACTION_VIEW -> {
+                                            val uri = targetIntent.data
+                                            if (uri != null && uri.scheme == "airbeats") {
+                                                when (uri.host) {
+                                                    "play" -> {
+                                                        val query = uri.getQueryParameter("q")
+                                                            ?: uri.getQueryParameter("query")
+                                                            ?: uri.getQueryParameter("title")
+                                                            ?: uri.getQueryParameter("search")
+                                                        if (!query.isNullOrBlank()) {
+                                                            val serviceIntent = Intent(this@MainActivity, com.darkxvenom.airbeats.playback.MusicService::class.java).apply {
+                                                                action = android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH
+                                                                putExtra(android.app.SearchManager.QUERY, query)
+                                                                uri.getQueryParameter("artist")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ARTIST, it) }
+                                                                uri.getQueryParameter("album")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ALBUM, it) }
+                                                            }
+                                                            try {
+                                                                startService(serviceIntent)
+                                                            } catch (e: Exception) {
+                                                                Timber.e(e, "Failed to start MusicService for airbeats://play deep link")
+                                                            }
+                                                        }
+                                                    }
+                                                    "search" -> {
+                                                        val query = uri.getQueryParameter("q") ?: uri.getQueryParameter("query")
+                                                        if (!query.isNullOrBlank()) {
+                                                            navController.navigate("search/${java.net.URLEncoder.encode(query, "UTF-8")}")
+                                                        } else {
+                                                            openSearchImmediately = true
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            pendingIntentFlow.value = null
+                                        }
+                                        Intent.ACTION_SEARCH -> {
+                                            val query = targetIntent.getStringExtra(android.app.SearchManager.QUERY)
+                                                ?: targetIntent.getStringExtra("query")
+                                                ?: targetIntent.getStringExtra("search_query")
+                                            if (!query.isNullOrBlank()) {
+                                                navController.navigate("search/${java.net.URLEncoder.encode(query, "UTF-8")}")
+                                            } else {
+                                                openSearchImmediately = true
                                             }
                                             pendingIntentFlow.value = null
                                         }

@@ -1,22 +1,85 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <capability android:name="actions.intent.PLAY_MEDIA">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="airbeats://play"
+            android:targetPackage="com.darkxvenom.airbeats.debug"
+            android:targetClass="com.darkxvenom.airbeats.MainActivity">
+            <url-template android:value="airbeats://play{?q,artist,album}" />
+            <parameter
+                android:name="audio.name"
+                android:key="q" />
+            <parameter
+                android:name="audio.byArtist.name"
+                android:key="artist" />
+            <parameter
+                android:name="audio.inAlbum.name"
+                android:key="album" />
+        </intent>
+        <intent
+            android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+            android:targetPackage="com.darkxvenom.airbeats.debug"
+            android:targetClass="com.darkxvenom.airbeats.MainActivity">
+            <parameter
+                android:name="audio.name"
+                android:key="query" />
+            <parameter
+                android:name="audio.byArtist.name"
+                android:key="android.intent.extra.artist" />
+            <parameter
+                android:name="audio.inAlbum.name"
+                android:key="android.intent.extra.album" />
+        </intent>
+    </capability>
+
     <capability android:name="actions.intent.PLAY_MUSIC_TRACK">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="airbeats://play"
+            android:targetPackage="com.darkxvenom.airbeats.debug"
+            android:targetClass="com.darkxvenom.airbeats.MainActivity">
+            <url-template android:value="airbeats://play{?q,artist,album}" />
+            <parameter
+                android:name="musicTrack.name"
+                android:key="q" />
+            <parameter
+                android:name="musicTrack.byArtist.name"
+                android:key="artist" />
+            <parameter
+                android:name="musicTrack.inAlbum.name"
+                android:key="album" />
+        </intent>
         <intent
             android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
             android:targetPackage="com.darkxvenom.airbeats.debug"
             android:targetClass="com.darkxvenom.airbeats.MainActivity">
             <parameter
                 android:name="musicTrack.name"
-                android:key="voice_query" />
+                android:key="query" />
             <parameter
                 android:name="musicTrack.name"
-                android:key="query" />
+                android:key="voice_query" />
             <parameter
                 android:name="musicTrack.byArtist.name"
                 android:key="android.intent.extra.artist" />
             <parameter
                 android:name="musicTrack.inAlbum.name"
                 android:key="android.intent.extra.album" />
+        </intent>
+    </capability>
+
+    <capability android:name="actions.intent.GET_THING">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="airbeats://search"
+            android:targetPackage="com.darkxvenom.airbeats.debug"
+            android:targetClass="com.darkxvenom.airbeats.MainActivity">
+            <url-template android:value="airbeats://search{?q}" />
+            <parameter
+                android:name="thing.name"
+                android:key="q" />
         </intent>
     </capability>
 
