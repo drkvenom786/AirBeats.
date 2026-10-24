@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <capability android:name="actions.intent.PLAY_MUSIC_TRACK">
+        <intent
+            android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+            android:targetPackage="com.darkxvenom.airbeats.debug"
+            android:targetClass="com.darkxvenom.airbeats.MainActivity">
+            <parameter
+                android:name="musicTrack.name"
+                android:key="voice_query" />
+            <parameter
+                android:name="musicTrack.name"
+                android:key="query" />
+            <parameter
+                android:name="musicTrack.byArtist.name"
+                android:key="android.intent.extra.artist" />
+            <parameter
+                android:name="musicTrack.inAlbum.name"
+                android:key="android.intent.extra.album" />
+        </intent>
+    </capability>
+
+    <capability android:name="actions.intent.CREATE_MEDIA_PLAYLIST">
+        <intent
+            android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+            android:targetPackage="com.darkxvenom.airbeats.debug"
+            android:targetClass="com.darkxvenom.airbeats.MainActivity">
+            <parameter
+                android:name="mediaPlaylist.name"
+                android:key="voice_query" />
+            <parameter
+                android:name="mediaPlaylist.name"
+                android:key="query" />
+        </intent>
+    </capability>
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/search"
+        android:shortcutId="search"
+        android:shortcutShortLabel="@string/search">
+        <intent
+            android:action="com.darkxvenom.airbeats.action.SEARCH"
+            android:targetClass="com.darkxvenom.airbeats.MainActivity"
+            android:targetPackage="com.darkxvenom.airbeats.debug" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/explore"
+        android:shortcutId="explore"
+        android:shortcutShortLabel="@string/explore">
+        <intent
+            android:action="com.darkxvenom.airbeats.action.EXPLORE"
+            android:targetClass="com.darkxvenom.airbeats.MainActivity"
+            android:targetPackage="com.darkxvenom.airbeats.debug" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/library_music"
+        android:shortcutId="library"
+        android:shortcutShortLabel="@string/filter_library">
+        <intent
+            android:action="com.darkxvenom.airbeats.action.LIBRARY"
+            android:targetClass="com.darkxvenom.airbeats.MainActivity"
+            android:targetPackage="com.darkxvenom.airbeats.debug" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/mic"
+        android:shortcutId="music_recognition"
+        android:shortcutShortLabel="@string/identify_music">
+        <intent
+            android:action="com.darkxvenom.airbeats.action.MUSIC_RECOGNITION"
+            android:targetClass="com.darkxvenom.airbeats.MainActivity"
+            android:targetPackage="com.darkxvenom.airbeats.debug" />
+    </shortcut>
+</shortcuts>

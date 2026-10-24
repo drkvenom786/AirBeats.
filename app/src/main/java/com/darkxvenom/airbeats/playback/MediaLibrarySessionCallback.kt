@@ -859,7 +859,11 @@ constructor(
                     val isSearchRequest = !firstItem.requestMetadata.searchQuery.isNullOrBlank() ||
                         (firstItem.requestMetadata.extras != null && (
                             firstItem.requestMetadata.extras!!.containsKey(android.provider.MediaStore.EXTRA_MEDIA_FOCUS) ||
-                            firstItem.requestMetadata.extras!!.containsKey(android.app.SearchManager.QUERY)
+                            firstItem.requestMetadata.extras!!.containsKey(android.app.SearchManager.QUERY) ||
+                            firstItem.requestMetadata.extras!!.containsKey("voice_query") ||
+                            firstItem.requestMetadata.extras!!.containsKey("query") ||
+                            firstItem.requestMetadata.extras!!.containsKey(android.provider.MediaStore.EXTRA_MEDIA_TITLE) ||
+                            firstItem.requestMetadata.extras!!.containsKey(android.content.Intent.EXTRA_TITLE)
                         ))
 
                     if (!isSearchRequest && firstItem.mediaMetadata.isPlayable == true && firstItem.mediaId.isNotBlank() && mediaItems.size > 1) {

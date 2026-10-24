@@ -15,12 +15,18 @@ import org.junit.Test
 class VoiceMediaSearchManagerTest {
 
     // Helper parser/logic mirror to unit-test VoiceMediaSearchManager pure query rules
-    private val titleCleaner = { raw: String ->
+    private val titleCleaner = { raw: String, extractedArtist: String? ->
         var q = raw.trim()
+        q = q.replace(Regex("^(?:hey|ok|okay)\\s+google[,\\s]*", RegexOption.IGNORE_CASE), "")
         q = q.replace(Regex("^(?:play|listen\\s+to|put\\s+on|stream|find)\\s+", RegexOption.IGNORE_CASE), "")
         q = q.replace(Regex("\\s+(?:on|in|with)\\s+air\\s*beats?$", RegexOption.IGNORE_CASE), "")
         q = q.replace(Regex("\\s+on\\s+airbeats$", RegexOption.IGNORE_CASE), "")
         q = q.replace(Regex("^(?:the\\s+)?(?:song|track)\\s+(?:called\\s+)?", RegexOption.IGNORE_CASE), "")
+        if (!extractedArtist.isNullOrBlank()) {
+            q = q.replace(Regex("\\s+by\\s+" + Regex.escape(extractedArtist) + "$", RegexOption.IGNORE_CASE), "")
+        } else if (q.contains(Regex("\\s+by\\s+", RegexOption.IGNORE_CASE))) {
+            q = q.replace(Regex("\\s+by\\s+.*$", RegexOption.IGNORE_CASE), "")
+        }
         q.trim()
     }
 
@@ -94,11 +100,13 @@ class VoiceMediaSearchManagerTest {
 
     @Test
     fun testSongTitleCleaning() {
-        assertEquals("Believer", titleCleaner("Hey Google, play Believer on AirBeats".replace("Hey Google, ", "")))
-        assertEquals("Starboy", titleCleaner("play Starboy on airbeats"))
-        assertEquals("Shape of You", titleCleaner("listen to the song Shape of You"))
-        assertEquals("Bohemian Rhapsody", titleCleaner("put on song called Bohemian Rhapsody"))
-        assertEquals("Night Changes", titleCleaner("stream Night Changes on Air Beats"))
+        assertEquals("Believer", titleCleaner("Hey Google, play Believer on AirBeats", null))
+        assertEquals("Starboy", titleCleaner("play Starboy on airbeats", null))
+        assertEquals("Shape of You", titleCleaner("listen to the song Shape of You", null))
+        assertEquals("Bohemian Rhapsody", titleCleaner("put on song called Bohemian Rhapsody", null))
+        assertEquals("Night Changes", titleCleaner("stream Night Changes on Air Beats", null))
+        assertEquals("Believer", titleCleaner("Believer by Imagine Dragons", "Imagine Dragons"))
+        assertEquals("Starboy", titleCleaner("play Starboy by The Weeknd on AirBeats", "The Weeknd"))
     }
 
     @Test

@@ -4607,17 +4607,25 @@ class MusicService :
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) {
+        if (intent?.action == android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH ||
+            intent?.action == "android.intent.action.MEDIA_SEARCH"
+        ) {
             handleVoiceSearchIntent(intent)
         }
         return super.onStartCommand(intent, flags, startId)
     }
 
-    private fun handleVoiceSearchIntent(intent: Intent) {
+    fun handleVoiceSearchIntent(intent: Intent) {
         val query = intent.getStringExtra(android.app.SearchManager.QUERY)
+            ?: intent.getStringExtra("voice_query")
+            ?: intent.getStringExtra("query")
+            ?: intent.getStringExtra(android.provider.MediaStore.EXTRA_MEDIA_TITLE)
+            ?: intent.getStringExtra(android.content.Intent.EXTRA_TITLE)
+            ?: intent.getStringExtra(android.app.SearchManager.USER_QUERY)
+            ?: ""
         val extras = intent.extras ?: android.os.Bundle.EMPTY
         val searchItem = MediaItem.Builder()
-            .setMediaId(query ?: "")
+            .setMediaId(query)
             .setRequestMetadata(
                 MediaItem.RequestMetadata.Builder()
                     .setSearchQuery(query)
@@ -4635,8 +4643,10 @@ class MusicService :
                 )
             }
             if (result.mediaItems.isNotEmpty()) {
-                player.setMediaItems(result.mediaItems, result.startIndex, result.startPositionMs)
-                player.prepare()
+                if (player.currentMediaItem?.mediaId != result.mediaItems.firstOrNull()?.mediaId) {
+                    player.setMediaItems(result.mediaItems, result.startIndex, result.startPositionMs)
+                    player.prepare()
+                }
                 player.playWhenReady = true
                 player.play()
             }

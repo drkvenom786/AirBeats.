@@ -71,7 +71,15 @@ constructor(
         try {
             val requestMetadata = item.requestMetadata
             val extras = requestMetadata.extras ?: Bundle.EMPTY
-            val rawQuery = requestMetadata.searchQuery ?: extras.getString(SearchManager.QUERY) ?: ""
+            val rawQuery = (requestMetadata.searchQuery?.takeIf { it.isNotBlank() }
+                ?: extras.getString(SearchManager.QUERY)
+                ?: extras.getString("voice_query")
+                ?: extras.getString("query")
+                ?: extras.getString(MediaStore.EXTRA_MEDIA_TITLE)
+                ?: extras.getString(android.content.Intent.EXTRA_TITLE)
+                ?: extras.getString(SearchManager.USER_QUERY)
+                ?: item.mediaId.takeIf { it.isNotBlank() && !it.contains("/") && !it.matches(Regex("[A-Za-z0-9_-]{11}")) }
+                ?: "").trim()
             val focus = extras.getString(MediaStore.EXTRA_MEDIA_FOCUS)
             val titleExtra = extras.getString(MediaStore.EXTRA_MEDIA_TITLE)?.trim()
             val artistExtra = extras.getString(MediaStore.EXTRA_MEDIA_ARTIST)?.trim()
@@ -131,8 +139,8 @@ constructor(
             }
 
             // 5. Specific Song Search (Title + optional Artist, with fallback)
-            val cleanTitle = titleExtra ?: cleanTitleFromQuery(rawQuery)
             val cleanArtist = artistExtra ?: extractArtistFromQuery(rawQuery)
+            val cleanTitle = titleExtra ?: cleanTitleFromQuery(rawQuery, cleanArtist)
 
             val songResult = resolveSongRequest(cleanTitle, cleanArtist, rawQuery)
             if (songResult != null) {
@@ -578,11 +586,14 @@ constructor(
      * Helper to synchronize queue state with active MusicService where available,
      * ensuring infinite radio or auto-loading operates seamlessly.
      */
-    private fun syncServiceQueue(queue: com.darkxvenom.airbeats.playback.queues.Queue) {
+    private fun syncServiceQueue(
+        queue: com.darkxvenom.airbeats.playback.queues.Queue,
+        playWhenReady: Boolean = true,
+    ) {
         try {
             val service = MusicService.instance ?: PlayerConnection.instance?.service
             service?.let {
-                it.playQueue(queue, playWhenReady = false)
+                it.playQueue(queue, playWhenReady = playWhenReady)
             }
         } catch (e: Exception) {
             Timber.w(e, "Could not synchronize service queue directly")
@@ -627,7 +638,8 @@ constructor(
         val genericPhrases = setOf(
             "play music", "play songs", "play some music", "play some songs",
             "start music", "play something", "play anything", "shuffle music",
-            "shuffle songs", "resume", "play", "airbeats", "continue"
+            "shuffle songs", "resume", "play", "airbeats", "continue",
+            "resume music", "play on airbeats", "resume playback", "unpause", "continue music"
         )
         return genericPhrases.contains(lower) || lower == "airbeats play music" || lower == "play music on airbeats"
     }
@@ -669,8 +681,10 @@ constructor(
     /**
      * Strips voice assistant conversational prefixes/suffixes from song query.
      */
-    fun cleanTitleFromQuery(rawQuery: String): String {
+    fun cleanTitleFromQuery(rawQuery: String, extractedArtist: String? = null): String {
         var q = rawQuery.trim()
+        // Strip Google Assistant / Gemini wake words if present
+        q = q.replace(Regex("^(?:hey|ok|okay)\\s+google[,\\s]*", RegexOption.IGNORE_CASE), "")
         // Strip common command verbs
         q = q.replace(Regex("^(?:play|listen\\s+to|put\\s+on|stream|find)\\s+", RegexOption.IGNORE_CASE), "")
         // Strip app name references
@@ -678,6 +692,12 @@ constructor(
         q = q.replace(Regex("\\s+on\\s+airbeats$", RegexOption.IGNORE_CASE), "")
         // Strip "the song", "song", "track"
         q = q.replace(Regex("^(?:the\\s+)?(?:song|track)\\s+(?:called\\s+)?", RegexOption.IGNORE_CASE), "")
+        // Strip artist suffix from title if extracted or present
+        if (!extractedArtist.isNullOrBlank()) {
+            q = q.replace(Regex("\\s+by\\s+" + Regex.escape(extractedArtist) + "$", RegexOption.IGNORE_CASE), "")
+        } else if (q.contains(Regex("\\s+by\\s+", RegexOption.IGNORE_CASE))) {
+            q = q.replace(Regex("\\s+by\\s+.*$", RegexOption.IGNORE_CASE), "")
+        }
         return q.trim()
     }
 
