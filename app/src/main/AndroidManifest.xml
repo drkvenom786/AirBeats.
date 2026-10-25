@@ -167,6 +167,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="airbeats" android:host="play" />
                 <data android:scheme="airbeats" android:host="search" />
+                <data android:scheme="airbeats" />
             </intent-filter>
 
             <!-- Listen Together deep link -->

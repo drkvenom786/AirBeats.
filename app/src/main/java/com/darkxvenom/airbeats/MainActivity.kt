@@ -418,6 +418,8 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        timber.log.Timber.i("[DeepLink] MainActivity onNewIntent: action=%s, data=%s", intent.action, intent.data)
+        com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "onNewIntent: action=${intent.action}, data=${intent.data}")
         lastFmAuthCallbackCoordinator.capture(intent)
         pendingIntentFlow.value = intent
     }
@@ -427,6 +429,8 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
 
         super.onCreate(savedInstanceState)
+        timber.log.Timber.i("[DeepLink] MainActivity onCreate: action=%s, data=%s", intent?.action, intent?.data)
+        com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "onCreate: action=${intent?.action}, data=${intent?.data}")
         pendingIntentFlow.value = intent
         lastFmAuthCallbackCoordinator.capture(intent)
 
@@ -1045,41 +1049,62 @@ class MainActivity : FragmentActivity() {
                                         val uri = intent.data ?: intent.extras?.getString(Intent.EXTRA_TEXT)
                                             ?.toUri() ?: return@Consumer
 
-                                        if (uri.scheme == "airbeats") {
-                                            when (uri.host) {
-                                                "play" -> {
-                                                    val query = uri.getQueryParameter("q")
-                                                        ?: uri.getQueryParameter("query")
-                                                        ?: uri.getQueryParameter("title")
-                                                        ?: uri.getQueryParameter("search")
-                                                    if (!query.isNullOrBlank()) {
-                                                        val serviceIntent = Intent(this@MainActivity, com.darkxvenom.airbeats.playback.MusicService::class.java).apply {
-                                                            action = android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH
-                                                            putExtra(android.app.SearchManager.QUERY, query)
-                                                            uri.getQueryParameter("artist")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ARTIST, it) }
-                                                            uri.getQueryParameter("album")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ALBUM, it) }
-                                                        }
-                                                        try {
-                                                            startService(serviceIntent)
-                                                        } catch (e: Exception) {
-                                                            Timber.e(e, "Failed to start MusicService for airbeats://play deep link")
-                                                        }
-                                                    }
-                                                    return@Consumer
+                                        timber.log.Timber.i("[DeepLink] Consumer received URI: %s (scheme=%s, host=%s, path=%s)", uri, uri.scheme, uri.host, uri.path)
+                                        com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "Consumer received URI: $uri")
+
+                                        val isPlayAction = uri.scheme == "airbeats" && (uri.host == "play" || uri.pathSegments.firstOrNull() == "play")
+                                        val isSearchAction = uri.scheme == "airbeats" && (uri.host == "search" || uri.pathSegments.firstOrNull() == "search")
+
+                                        if (isPlayAction) {
+                                            val query = uri.getQueryParameter("q")
+                                                ?: uri.getQueryParameter("query")
+                                                ?: uri.getQueryParameter("title")
+                                                ?: uri.getQueryParameter("search")
+                                                ?: if (uri.pathSegments.firstOrNull() == "play") uri.pathSegments.getOrNull(1) else uri.pathSegments.firstOrNull()
+                                            timber.log.Timber.i("[DeepLink] Play action extracted query: '%s'", query)
+                                            com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "Play query: '$query'")
+                                            if (!query.isNullOrBlank()) {
+                                                val serviceIntent = Intent(this@MainActivity, com.darkxvenom.airbeats.playback.MusicService::class.java).apply {
+                                                    action = android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH
+                                                    putExtra(android.app.SearchManager.QUERY, query)
+                                                    uri.getQueryParameter("artist")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ARTIST, it) }
+                                                    uri.getQueryParameter("album")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ALBUM, it) }
                                                 }
-                                                "search" -> {
-                                                    val query = uri.getQueryParameter("q") ?: uri.getQueryParameter("query")
-                                                    if (!query.isNullOrBlank()) {
-                                                        navController.navigate("search/${java.net.URLEncoder.encode(query, "UTF-8")}")
-                                                    } else {
-                                                        openSearchImmediately = true
+                                                val service = com.darkxvenom.airbeats.playback.MusicService.instance ?: playerConnection?.service
+                                                if (service != null) {
+                                                    service.handleVoiceSearchIntent(serviceIntent)
+                                                    timber.log.Timber.i("[DeepLink] Invoked handleVoiceSearchIntent directly on active service instance: %s", query)
+                                                    com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "Direct dispatch to MusicService: $query")
+                                                } else {
+                                                    try {
+                                                        startService(serviceIntent)
+                                                        timber.log.Timber.i("[DeepLink] Dispatched startService for play query: %s", query)
+                                                        com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "Dispatched startService: $query")
+                                                    } catch (e: Exception) {
+                                                        timber.log.Timber.e(e, "Failed to start MusicService for airbeats://play deep link")
+                                                        com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.ERROR, "DeepLink", "Failed startService: ${e.message}")
                                                     }
-                                                    return@Consumer
-                                                }
-                                                "auth-callback" -> {
-                                                    return@Consumer
                                                 }
                                             }
+                                            return@Consumer
+                                        }
+
+                                        if (isSearchAction) {
+                                            val query = uri.getQueryParameter("q")
+                                                ?: uri.getQueryParameter("query")
+                                                ?: if (uri.pathSegments.firstOrNull() == "search") uri.pathSegments.getOrNull(1) else uri.pathSegments.firstOrNull()
+                                            timber.log.Timber.i("[DeepLink] Search action extracted query: '%s'", query)
+                                            com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "Search query: '$query'")
+                                            if (!query.isNullOrBlank()) {
+                                                navController.navigate("search/${java.net.URLEncoder.encode(query, "UTF-8")}")
+                                            } else {
+                                                openSearchImmediately = true
+                                            }
+                                            return@Consumer
+                                        }
+
+                                        if (uri.scheme == "airbeats" && uri.host == "auth-callback") {
+                                            return@Consumer
                                         }
                                         
                                         if (com.darkxvenom.airbeats.utils.RemoteConfigManager.isMatchingListenTogetherDomain(uri.host)) {
@@ -2065,34 +2090,53 @@ class MainActivity : FragmentActivity() {
                                         }
                                         Intent.ACTION_VIEW -> {
                                             val uri = targetIntent.data
-                                            if (uri != null && uri.scheme == "airbeats") {
-                                                when (uri.host) {
-                                                    "play" -> {
-                                                        val query = uri.getQueryParameter("q")
-                                                            ?: uri.getQueryParameter("query")
-                                                            ?: uri.getQueryParameter("title")
-                                                            ?: uri.getQueryParameter("search")
-                                                        if (!query.isNullOrBlank()) {
-                                                            val serviceIntent = Intent(this@MainActivity, com.darkxvenom.airbeats.playback.MusicService::class.java).apply {
-                                                                action = android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH
-                                                                putExtra(android.app.SearchManager.QUERY, query)
-                                                                uri.getQueryParameter("artist")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ARTIST, it) }
-                                                                uri.getQueryParameter("album")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ALBUM, it) }
-                                                            }
+                                            timber.log.Timber.i("[DeepLink] LaunchedEffect ACTION_VIEW: %s", uri)
+                                            com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "LaunchedEffect ACTION_VIEW: $uri")
+                                            if (uri != null) {
+                                                val isPlay = uri.scheme == "airbeats" && (uri.host == "play" || uri.pathSegments.firstOrNull() == "play")
+                                                val isSearch = uri.scheme == "airbeats" && (uri.host == "search" || uri.pathSegments.firstOrNull() == "search")
+
+                                                if (isPlay) {
+                                                    val query = uri.getQueryParameter("q")
+                                                        ?: uri.getQueryParameter("query")
+                                                        ?: uri.getQueryParameter("title")
+                                                        ?: uri.getQueryParameter("search")
+                                                        ?: if (uri.pathSegments.firstOrNull() == "play") uri.pathSegments.getOrNull(1) else uri.pathSegments.firstOrNull()
+                                                    timber.log.Timber.i("[DeepLink] LaunchedEffect play query: '%s'", query)
+                                                    com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "LaunchedEffect play query: '$query'")
+                                                    if (!query.isNullOrBlank()) {
+                                                        val serviceIntent = Intent(this@MainActivity, com.darkxvenom.airbeats.playback.MusicService::class.java).apply {
+                                                            action = android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH
+                                                            putExtra(android.app.SearchManager.QUERY, query)
+                                                            uri.getQueryParameter("artist")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ARTIST, it) }
+                                                            uri.getQueryParameter("album")?.let { putExtra(android.provider.MediaStore.EXTRA_MEDIA_ALBUM, it) }
+                                                        }
+                                                        val service = com.darkxvenom.airbeats.playback.MusicService.instance ?: playerConnection?.service
+                                                        if (service != null) {
+                                                            service.handleVoiceSearchIntent(serviceIntent)
+                                                            timber.log.Timber.i("[DeepLink] LaunchedEffect direct dispatch to MusicService: %s", query)
+                                                            com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "Direct dispatch to MusicService: $query")
+                                                        } else {
                                                             try {
                                                                 startService(serviceIntent)
+                                                                timber.log.Timber.i("[DeepLink] LaunchedEffect startService sent")
+                                                                com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "startService sent for: $query")
                                                             } catch (e: Exception) {
-                                                                Timber.e(e, "Failed to start MusicService for airbeats://play deep link")
+                                                                timber.log.Timber.e(e, "Failed to start MusicService for airbeats://play deep link")
+                                                                com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.ERROR, "DeepLink", "Failed startService: ${e.message}")
                                                             }
                                                         }
                                                     }
-                                                    "search" -> {
-                                                        val query = uri.getQueryParameter("q") ?: uri.getQueryParameter("query")
-                                                        if (!query.isNullOrBlank()) {
-                                                            navController.navigate("search/${java.net.URLEncoder.encode(query, "UTF-8")}")
-                                                        } else {
-                                                            openSearchImmediately = true
-                                                        }
+                                                } else if (isSearch) {
+                                                    val query = uri.getQueryParameter("q")
+                                                        ?: uri.getQueryParameter("query")
+                                                        ?: if (uri.pathSegments.firstOrNull() == "search") uri.pathSegments.getOrNull(1) else uri.pathSegments.firstOrNull()
+                                                    timber.log.Timber.i("[DeepLink] LaunchedEffect search query: '%s'", query)
+                                                    com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "DeepLink", "LaunchedEffect search query: '$query'")
+                                                    if (!query.isNullOrBlank()) {
+                                                        navController.navigate("search/${java.net.URLEncoder.encode(query, "UTF-8")}")
+                                                    } else {
+                                                        openSearchImmediately = true
                                                     }
                                                 }
                                             }

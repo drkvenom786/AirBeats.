@@ -87,14 +87,19 @@ constructor(
             val playlistExtra = extras.getString(MediaStore.EXTRA_MEDIA_PLAYLIST)?.trim()
             val genreExtra = extras.getString(MediaStore.EXTRA_MEDIA_GENRE)?.trim()
 
-            Timber.d(
-                "VoiceMediaSearchManager resolving query='%s', focus='%s', title='%s', artist='%s', album='%s', playlist='%s'",
+            Timber.i(
+                "[VoiceSearch] VoiceMediaSearchManager resolving query='%s', focus='%s', title='%s', artist='%s', album='%s', playlist='%s'",
                 rawQuery,
                 focus,
                 titleExtra,
                 artistExtra,
                 albumExtra,
                 playlistExtra
+            )
+            com.darkxvenom.airbeats.utils.GlobalLog.append(
+                android.util.Log.INFO,
+                "VoiceSearch",
+                "Resolving query: '$rawQuery'"
             )
 
             // 1. Check for Liked Songs / Playlist requests
@@ -270,7 +275,12 @@ constructor(
             val ranked = SongMatchEngine.rankCandidates(targetSong, candidates)
             val topMatch = ranked.firstOrNull() ?: candidates.first()
 
-            Timber.d("VoiceMediaSearchManager selected top match: %s by %s", topMatch.title, topMatch.artists.joinToString())
+            Timber.i("[VoiceSearch] Selected top match: %s by %s", topMatch.title, topMatch.artists.joinToString())
+            com.darkxvenom.airbeats.utils.GlobalLog.append(
+                android.util.Log.INFO,
+                "VoiceSearch",
+                "Match: '${topMatch.title}' by ${topMatch.artists.joinToString()}"
+            )
             val metadata = topMatch.mediaMetadata
             val queue = YouTubeQueue(WatchEndpoint(topMatch.id), metadata)
             syncServiceQueue(queue)

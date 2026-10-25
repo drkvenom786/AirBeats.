@@ -4624,6 +4624,8 @@ class MusicService :
             ?: intent.getStringExtra(android.app.SearchManager.USER_QUERY)
             ?: ""
         val extras = intent.extras ?: android.os.Bundle.EMPTY
+        Timber.i("[VoiceSearch] MusicService.handleVoiceSearchIntent query: '%s'", query)
+        com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "VoiceSearch", "handleVoiceSearchIntent query='$query'")
         val searchItem = MediaItem.Builder()
             .setMediaId(query)
             .setRequestMetadata(
@@ -4642,6 +4644,8 @@ class MusicService :
                     defaultResult = MediaSession.MediaItemsWithStartPosition(emptyList(), 0, 0L),
                 )
             }
+            Timber.i("[VoiceSearch] MusicService resolved items: %d", result.mediaItems.size)
+            com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "VoiceSearch", "Resolved items: ${result.mediaItems.size}")
             if (result.mediaItems.isNotEmpty()) {
                 if (player.currentMediaItem?.mediaId != result.mediaItems.firstOrNull()?.mediaId) {
                     player.setMediaItems(result.mediaItems, result.startIndex, result.startPositionMs)
@@ -4649,6 +4653,8 @@ class MusicService :
                 }
                 player.playWhenReady = true
                 player.play()
+                Timber.i("[VoiceSearch] MusicService started playback for: %s", result.mediaItems.firstOrNull()?.mediaMetadata?.title)
+                com.darkxvenom.airbeats.utils.GlobalLog.append(android.util.Log.INFO, "VoiceSearch", "Playback started: ${result.mediaItems.firstOrNull()?.mediaMetadata?.title}")
             }
         }
     }
